@@ -1,0 +1,54 @@
+name: Daily Trade
+
+on:
+  schedule:
+    - cron: '30 20 * * 1-5' # 16:30 ET Mon-Fri
+  workflow_dispatch:
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: stocks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install -q joblib lightgbm yfinance pandas numpy requests tqdm python-calamine scikit-learn
+
+      - name: Recombine cache files
+        run: bash recombine.sh
+
+      - name: Preflight checks
+        id: preflight
+        env:
+          STOCK_API_KEY: ${{ secrets.STOCK_API_KEY }}
+        run: |
+          if [ -z "$STOCK_API_KEY" ]; then
+            echo "::warning::STOCK_API_KEY is not configured; skipping run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ ! -f "lgbm_ensemble.joblib" ] || [ ! -f "cache_data.joblib" ]; then
+            echo "::warning::Required files (lgbm_ensemble.joblib, cache_data.joblib) are missing; skipping run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Run trade
+        if: steps.preflight.outputs.skip != 'true'
+        run: python trade.py
+        env:
+          STOCK_API_KEY: ${{ secrets.STOCK_API_KEY }}
