@@ -293,7 +293,7 @@ for t in tqdm(TICKERS, desc="Predicting"):
                     if probas_all.ndim==2 and probas_all.shape[1]==3:
                         pred = 2 if proba_up >= lgbm_buy_thr else 0
                     else:
-                        pred = 1 if proba_up >= 0.56 else 0
+                        pred = 1 if proba_up >= 0.60 else 0
                     ha_cl = (c[-2:]+h[-2:]+l[-2:]+c[-2:])/4
                     ha_op = np.zeros(2); ha_op[0] = (c[-3]+o[-3])/2 if len(o)>2 else (c[-2]+o[-2])/2
                     ha_op[1] = (ha_op[0]+ha_cl[0])/2; ha_d = "▲" if ha_cl[-1]>ha_op[-1] else "▼"

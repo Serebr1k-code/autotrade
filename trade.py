@@ -135,7 +135,7 @@ for t in tqdm(TICKERS, desc="Predict"):
     if top_idx is not None: Xs = Xs[:, top_idx]
     raw = np.mean([m.predict_proba(Xs)[:,1] for m in lgbm], axis=0)[0]
     cal = np.clip(1/(1+np.exp(-(cal_coef*raw+cal_int))), 0.001, 0.999)
-    if cal >= 0.56:
+    if cal >= 0.60:
         predictions.append((t, cal, raw))
 print(f"Signals: {len(predictions)} bullish", flush=True)
 
