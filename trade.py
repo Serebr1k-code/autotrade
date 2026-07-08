@@ -50,7 +50,7 @@ for name,col,dmap in [("SPY","close",spy_map),("^VIX","close",vix_map),("^TNX","
     try:
         df = yf.download(name, period="6mo", interval="1d", progress=False, auto_adjust=True)
         if df.empty: continue
-        df.columns=[c[0].lower() for c in df.columns]
+        df.columns=[c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
         df.index=pd.to_datetime(df.index).tz_localize(None)
         vals = df[col].pct_change().values if name=="SPY" else df[col].values
         for d,v in zip(df.index,vals):
@@ -98,7 +98,7 @@ def build_one(t):
     try:
         df = yf.download(t, period=f"{MIN_DAYS+10}d", interval="1d", progress=False, auto_adjust=True)
         if len(df) < MIN_DAYS: return None
-        df.columns=[c[0].lower() for c in df.columns]
+        df.columns=[c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
         df=df.rename(columns={"open":"Open","high":"High","low":"Low","close":"Close","volume":"Volume"})
         df.index=pd.to_datetime(df.index).tz_localize("America/New_York"); df.index.name=None
         ft,_=add_stationary_features(df)
@@ -147,11 +147,16 @@ for t, cal, raw in sorted(predictions, key=lambda x:-x[1])[:20]:
     try:
         df = yf.download(t, period="5d", interval="1d", progress=False, auto_adjust=True)
         if df.empty: continue
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
         price = float(df['Close'].iloc[-1])
+        if price <= 0: continue
         selected.append((t, cal*100, price))
         print(f"  {t:>6s}  {cal*100:5.1f}%  ${price:<8.2f}", flush=True)
-    except: pass
-if not selected: print("No prices fetched."); sys.exit(0)
+    except Exception as e:
+        print(f"  {t}: price error {e}", flush=True)
+if not selected:
+    print("No prices fetched (rate limit?).", flush=True)
+    sys.exit(0)
 
 # ── Trade ──
 if not API_KEY: print("STOCK_API_KEY not set, skipping trade."); sys.exit(0)
