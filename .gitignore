@@ -7,3 +7,6 @@ models/
 cache_data.joblib
 cache_data.backup
 cache_data_*_part_*
+cache_data.joblib
+cache_data.backup
+cache_data_*_part_*
