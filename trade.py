@@ -139,8 +139,6 @@ for t in tqdm(TICKERS, desc="Predict"):
         predictions.append((t, cal, raw))
 print(f"Signals: {len(predictions)} bullish", flush=True)
 
-if not predictions: print("No bullish signals."); sys.exit(0)
-
 # ── Get live prices ──
 selected = []
 for t, cal, raw in sorted(predictions, key=lambda x:-x[1])[:20]:
@@ -154,13 +152,10 @@ for t, cal, raw in sorted(predictions, key=lambda x:-x[1])[:20]:
         print(f"  {t:>6s}  {cal*100:5.1f}%  ${price:<8.2f}", flush=True)
     except Exception as e:
         print(f"  {t}: price error {e}", flush=True)
-if not selected:
-    print("No prices fetched (rate limit?).", flush=True)
-    sys.exit(0)
 
 # ── Trade ──
 if not API_KEY: print("STOCK_API_KEY not set, skipping trade."); sys.exit(0)
-print(f"\n=== Sell existing ===", flush=True)
+print(f"\n=== Sell existing positions ===", flush=True)
 r = api_call("GET", "/api/v1/external/portfolio")
 cash = 0
 if r and r.status_code == 200:
@@ -183,27 +178,33 @@ if r and r.status_code == 200:
         except Exception as e: print(f"    Sell failed: {e}", flush=True)
         r3 = api_call("GET", "/api/v1/external/portfolio")
         if r3 and r3.status_code == 200: cash = r3.json().get("cash_balance", cash)
+    else:
+        print("  No positions to sell.", flush=True)
     print(f"  Cash after sell: ${cash:.2f}", flush=True)
-else: print("  Could not fetch portfolio.", flush=True)
+else:
+    print("  Could not fetch portfolio.", flush=True)
 
-print(f"\n=== Buy {len(selected)} signals ===", flush=True)
-accs = np.array([p[1] for p in selected]); weights = accs**2; weights /= weights.sum()
-buy_orders = []
-for (t, acc, price), w in zip(selected, weights):
-    s = max(1, int(cash * w / price))
-    buy_orders.append({"symbol": t, "action": "BUY", "quantity": s})
-    print(f"  BUY {t:>6s}: {s:>4d}sh × ${price:<8.2f} = ${s*price:<8.2f}  ({acc:.1f}%)", flush=True)
+if not selected:
+    print("\nNo buy signals. All sold, staying in cash.", flush=True)
+else:
+    print(f"\n=== Buy {len(selected)} signals ===", flush=True)
+    accs = np.array([p[1] for p in selected]); weights = accs**2; weights /= weights.sum()
+    buy_orders = []
+    for (t, acc, price), w in zip(selected, weights):
+        s = max(1, int(cash * w / price))
+        buy_orders.append({"symbol": t, "action": "BUY", "quantity": s})
+        print(f"  BUY {t:>6s}: {s:>4d}sh × ${price:<8.2f} = ${s*price:<8.2f}  ({acc:.1f}%)", flush=True)
 
-print(f"\nPlacing {len(buy_orders)} orders...", flush=True)
-try:
-    r = requests.post(f"{BASE}/api/v1/external/v1/trading/batch", headers=HEADERS,
-                     json={"orders": buy_orders}, timeout=30, verify=False)
-    if r and r.status_code == 200:
-        for x in r.json().get("results", []):
-            s=x.get("symbol",""); st=x.get("status",""); pr=x.get("price") or 0; q=x.get("quantity") or 0; e=x.get("error_code",""); m=x.get("message","")
-            if e or m: print(f"  {s}: {e} — {m}", flush=True)
-            else: print(f"  ✅ {s}: BUY {int(q)}sh @ ${pr:.2f}", flush=True)
-    else: print(f"  API error: {r.status_code if r else 'no response'}", flush=True)
-except Exception as e: print(f"  Buy failed: {e}", flush=True)
+    print(f"\nPlacing {len(buy_orders)} orders...", flush=True)
+    try:
+        r = requests.post(f"{BASE}/api/v1/external/v1/trading/batch", headers=HEADERS,
+                         json={"orders": buy_orders}, timeout=30, verify=False)
+        if r and r.status_code == 200:
+            for x in r.json().get("results", []):
+                s=x.get("symbol",""); st=x.get("status",""); pr=x.get("price") or 0; q=x.get("quantity") or 0; e=x.get("error_code",""); m=x.get("message","")
+                if e or m: print(f"  {s}: {e} — {m}", flush=True)
+                else: print(f"  ✅ {s}: BUY {int(q)}sh @ ${pr:.2f}", flush=True)
+        else: print(f"  API error: {r.status_code if r else 'no response'}", flush=True)
+    except Exception as e: print(f"  Buy failed: {e}", flush=True)
 
 print("\nDone!", flush=True)
